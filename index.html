@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario LaLiga — Partidos de Local</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0c1021;
+            --bg-secondary: #151a30;
+            --bg-card: #1c2341;
+            --bg-hover: #252d50;
+            --text-primary: #f0f0f0;
+            --text-secondary: #8892b0;
+            --text-muted: #5a6380;
+            --accent-ea: #ff2d55;
+            --accent-hyper: #00dc82;
+            --border: #2a3158;
+            --radius: 8px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* === HEADER === */
+        header {
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d1b4e 50%, #1a1f3a 100%);
+            padding: 1.2rem 2rem;
+            border-bottom: 2px solid var(--border);
+            display: flex; align-items: center; gap: 1rem;
+        }
+        header h1 {
+            font-size: 1.5rem; font-weight: 700;
+            background: linear-gradient(90deg, var(--accent-ea), #ff6b35, var(--accent-hyper));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        header .subtitle { color: var(--text-secondary); font-size: 0.9rem; }
+        header .season-tag {
+            margin-left: auto; padding: 0.3rem 0.8rem; border-radius: 20px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            font-size: 0.75rem; color: var(--text-secondary);
+        }
+
+        /* === LAYOUT === */
+        .container { display: flex; height: calc(100vh - 68px); }
+
+        /* === SIDEBAR === */
+        .sidebar {
+            width: 320px; min-width: 320px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+        .comp-tabs { display: flex; border-bottom: 1px solid var(--border); }
+        .comp-tab {
+            flex: 1; padding: 0.75rem; text-align: center;
+            background: none; border: none; color: var(--text-secondary);
+            cursor: pointer; font-size: 0.82rem; font-weight: 600;
+            transition: all 0.2s; border-bottom: 3px solid transparent;
+        }
+        .comp-tab.active { color: var(--text-primary); }
+        .comp-tab[data-comp="laliga-easports"].active { border-bottom-color: var(--accent-ea); }
+        .comp-tab[data-comp="laliga-hypermotion"].active { border-bottom-color: var(--accent-hyper); }
+        .comp-tab:hover { background: var(--bg-hover); }
+
+        /* Teams list */
+        .teams-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
+        .team-item {
+            display: flex; align-items: center; gap: 0.7rem;
+            padding: 0.45rem 0.7rem; border-radius: var(--radius);
+            cursor: pointer; transition: background 0.15s; user-select: none;
+        }
+        .team-item:hover { background: var(--bg-hover); }
+        .team-item input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; }
+        .team-item input[type="checkbox"].ea { accent-color: var(--accent-ea); }
+        .team-item input[type="checkbox"].hyper { accent-color: var(--accent-hyper); }
+        .team-item .team-name { font-size: 0.85rem; }
+
+        /* Actions */
+        .actions {
+            padding: 0.75rem; border-top: 1px solid var(--border);
+            display: flex; flex-direction: column; gap: 0.5rem;
+        }
+        .btn-row { display: flex; gap: 0.5rem; }
+        .btn {
+            padding: 0.5rem 1rem; border: none; border-radius: var(--radius);
+            cursor: pointer; font-size: 0.82rem; font-weight: 600; transition: all 0.2s;
+        }
+        .btn-sm {
+            flex: 1; padding: 0.4rem 0.5rem;
+            background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border);
+        }
+        .btn-sm:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .btn-primary {
+            width: 100%; padding: 0.7rem;
+            background: linear-gradient(135deg, var(--accent-ea), #ff6b35);
+            color: #fff; font-size: 0.9rem;
+        }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .match-count {
+            font-size: 0.78rem; color: var(--text-secondary); text-align: center;
+            padding: 0.3rem 0 0;
+        }
+
+        /* === MAIN AREA === */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Calendar nav */
+        .cal-nav {
+            display: flex; align-items: center; justify-content: center;
+            gap: 2rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);
+        }
+        .cal-nav button {
+            background: var(--bg-card); border: 1px solid var(--border);
+            color: var(--text-primary); width: 34px; height: 34px; border-radius: 50%;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 0.9rem; transition: all 0.2s;
+        }
+        .cal-nav button:hover { background: var(--bg-hover); }
+        .cal-nav h2 { font-size: 1.15rem; font-weight: 600; min-width: 220px; text-align: center; }
+
+        /* Calendar grid */
+        .cal-container { flex: 1; padding: 0.75rem; overflow-y: auto; }
+        .cal-header {
+            display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px;
+        }
+        .cal-header span {
+            text-align: center; font-size: 0.72rem; font-weight: 700;
+            color: var(--text-muted); text-transform: uppercase; padding: 0.4rem 0;
+        }
+        .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .cal-day {
+            min-height: 90px; background: var(--bg-secondary); border-radius: var(--radius);
+            padding: 0.35rem; border: 1px solid transparent; transition: border-color 0.2s;
+        }
+        .cal-day:hover { border-color: var(--border); }
+        .cal-day.empty { background: var(--bg-primary); opacity: 0.3; min-height: 40px; }
+        .cal-day.today { border-color: var(--accent-ea); }
+        .cal-day .day-num { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.2rem; }
+        .cal-day.today .day-num { color: var(--accent-ea); }
+
+        /* Match badges */
+        .match-badge {
+            display: flex; align-items: center; gap: 3px;
+            padding: 2px 5px; border-radius: 4px; font-size: 0.65rem;
+            margin-bottom: 2px; cursor: pointer; transition: opacity 0.15s;
+            overflow: hidden; white-space: nowrap;
+        }
+        .match-badge:hover { opacity: 0.75; }
+        .match-badge.ea {
+            background: rgba(255,45,85,0.15); color: var(--accent-ea); border-left: 2px solid var(--accent-ea);
+        }
+        .match-badge.hyper {
+            background: rgba(0,220,130,0.15); color: var(--accent-hyper); border-left: 2px solid var(--accent-hyper);
+        }
+        .match-badge .badge-time { font-weight: 700; flex-shrink: 0; }
+        .match-badge .badge-vs { overflow: hidden; text-overflow: ellipsis; }
+
+        /* === MODAL === */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.6); z-index: 100;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 1.5rem; max-width: 440px; width: 90%;
+        }
+        .modal h3 { margin-bottom: 1rem; font-size: 1rem; text-transform: capitalize; }
+        .modal .match-detail {
+            display: flex; align-items: center; gap: 0.6rem;
+            padding: 0.7rem; background: var(--bg-secondary); border-radius: var(--radius);
+            margin-bottom: 0.5rem; flex-wrap: wrap; justify-content: center;
+        }
+        .modal .match-detail img { width: 32px; height: 32px; object-fit: contain; }
+        .modal .match-detail .team-label { font-weight: 600; font-size: 0.95rem; text-align: center; }
+        .modal .match-detail .score {
+            font-weight: 800; font-size: 1.3rem; padding: 0 0.5rem;
+            background: linear-gradient(135deg, var(--accent-ea), #ff6b35);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .modal .match-detail .vs-label { color: var(--text-muted); font-size: 0.85rem; padding: 0 0.5rem; }
+        .modal .meta { color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.5rem; text-align: center; }
+        .modal .meta .comp-name { font-weight: 600; }
+        .modal .close-btn { margin-top: 1rem; width: 100%; }
+
+        /* === STATUS / LOADING === */
+        .status-msg {
+            display: flex; align-items: center; justify-content: center;
+            padding: 2rem; color: var(--text-secondary); font-size: 0.88rem; gap: 0.5rem;
+        }
+        .spinner {
+            width: 18px; height: 18px; border: 2px solid var(--border);
+            border-top-color: var(--accent-ea); border-radius: 50%;
+            animation: spin 0.7s linear infinite; flex-shrink: 0;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error-msg {
+            color: var(--accent-ea); background: rgba(255,45,85,0.08);
+            border: 1px solid rgba(255,45,85,0.25); border-radius: var(--radius);
+            padding: 1rem; margin: 0.5rem; font-size: 0.82rem; line-height: 1.5;
+        }
+        .empty-cal {
+            grid-column: 1 / -1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; padding: 3rem;
+            color: var(--text-muted); gap: 0.5rem; text-align: center;
+        }
+        .empty-cal .icon { font-size: 2.5rem; opacity: 0.4; }
+        .empty-cal p { font-size: 0.9rem; }
+        .progress-bar {
+            height: 3px; background: var(--border); border-radius: 2px; overflow: hidden;
+            margin-top: 0.3rem;
+        }
+        .progress-bar .fill {
+            height: 100%; background: linear-gradient(90deg, var(--accent-ea), var(--accent-hyper));
+            transition: width 0.3s; border-radius: 2px;
+        }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 900px) {
+            .container { flex-direction: column; height: auto; }
+            .sidebar { width: 100%; min-width: auto; max-height: 45vh; }
+            .cal-day { min-height: 65px; }
+            .match-badge { font-size: 0.6rem; padding: 2px 3px; }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Calendario LaLiga</h1>
+    <span class="subtitle">Partidos de local</span>
+    <span class="season-tag">Temporada 2025-26</span>
+</header>
+
+<div class="container">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="comp-tabs">
+            <button class="comp-tab active" data-comp="laliga-easports">EA Sports (20)</button>
+            <button class="comp-tab" data-comp="laliga-hypermotion">Hypermotion (22)</button>
+        </div>
+        <div class="teams-list" id="teamsList"></div>
+        <div class="actions">
+            <div class="btn-row">
+                <button class="btn btn-sm" id="selectAll">Seleccionar todos</button>
+                <button class="btn btn-sm" id="deselectAll">Deseleccionar</button>
+            </div>
+            <button class="btn btn-primary" id="fetchBtn" disabled>
+                Buscar partidos de local
+            </button>
+            <div id="progressArea"></div>
+            <div class="match-count" id="matchCount"></div>
+        </div>
+    </aside>
+
+    <!-- MAIN CALENDAR -->
+    <section class="main">
+        <div class="cal-nav">
+            <button id="prevMonth">&#9664;</button>
+            <h2 id="monthLabel"></h2>
+            <button id="nextMonth">&#9654;</button>
+        </div>
+        <div class="cal-container">
+            <div class="cal-header">
+                <span>Lun</span><span>Mar</span><span>Mie</span>
+                <span>Jue</span><span>Vie</span><span>Sab</span><span>Dom</span>
+            </div>
+            <div class="cal-days" id="calDays">
+                <div class="empty-cal">
+                    <div class="icon">&#9917;</div>
+                    <p>Selecciona equipos y pulsa <strong>Buscar partidos</strong></p>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <h3 id="modalTitle"></h3>
+        <div id="modalBody"></div>
+        <button class="btn btn-sm close-btn" id="modalClose">Cerrar</button>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    // =====================================================================
+    //  HARDCODED TEAMS — Temporada 2025-2026
+    //  Fuente: laliga.com/en-GB/laliga-easports/standing (marzo 2026)
+    // =====================================================================
+    const TEAM_DATA = {
+        'laliga-easports': [
+            { name: 'Athletic Club',          espn: ['athletic club', 'athletic bilbao'] },
+            { name: 'Atletico de Madrid',     espn: ['atletico madrid', 'atletico de madrid', 'club atletico de madrid'] },
+            { name: 'Celta de Vigo',          espn: ['celta vigo', 'celta de vigo', 'rc celta'] },
+            { name: 'Deportivo Alaves',       espn: ['alaves', 'deportivo alaves'] },
+            { name: 'Elche CF',               espn: ['elche'] },
+            { name: 'FC Barcelona',           espn: ['barcelona', 'fc barcelona'] },
+            { name: 'Getafe CF',              espn: ['getafe'] },
+            { name: 'Girona FC',              espn: ['girona'] },
+            { name: 'Levante UD',             espn: ['levante'] },
+            { name: 'CA Osasuna',             espn: ['osasuna'] },
+            { name: 'Rayo Vallecano',         espn: ['rayo vallecano'] },
+            { name: 'RCD Espanyol',           espn: ['espanyol', 'rcd espanyol'] },
+            { name: 'RCD Mallorca',           espn: ['mallorca', 'rcd mallorca'] },
+            { name: 'Real Betis',             espn: ['real betis', 'betis'] },
+            { name: 'Real Madrid',            espn: ['real madrid'] },
+            { name: 'Real Oviedo',            espn: ['real oviedo', 'oviedo'] },
+            { name: 'Real Sociedad',          espn: ['real sociedad'] },
+            { name: 'Sevilla FC',             espn: ['sevilla'] },
+            { name: 'Valencia CF',            espn: ['valencia'] },
+            { name: 'Villarreal CF',          espn: ['villarreal'] },
+        ],
+        'laliga-hypermotion': [
+            { name: 'AD Ceuta FC',            espn: ['ceuta'] },
+            { name: 'Albacete BP',            espn: ['albacete'] },
+            { name: 'Burgos CF',              espn: ['burgos'] },
+            { name: 'Cadiz CF',               espn: ['cadiz'] },
+            { name: 'CD Castellon',           espn: ['castellon'] },
+            { name: 'CD Leganes',             espn: ['leganes'] },
+            { name: 'CD Mirandes',            espn: ['mirandes'] },
+            { name: 'Cordoba CF',             espn: ['cordoba'] },
+            { name: 'Cultural Leonesa',       espn: ['cultural leonesa', 'cultural y deportiva leonesa'] },
+            { name: 'FC Andorra',             espn: ['andorra', 'fc andorra'] },
+            { name: 'Granada CF',             espn: ['granada'] },
+            { name: 'Malaga CF',              espn: ['malaga'] },
+            { name: 'RC Deportivo',           espn: ['deportivo la coruna', 'rc deportivo', 'deportivo'] },
+            { name: 'Real Sociedad B',        espn: ['real sociedad b', 'real sociedad ii'] },
+            { name: 'Real Sporting',          espn: ['sporting gijon', 'real sporting', 'sporting de gijon'] },
+            { name: 'Real Valladolid CF',     espn: ['valladolid', 'real valladolid'] },
+            { name: 'Real Zaragoza',          espn: ['zaragoza', 'real zaragoza'] },
+            { name: 'Real Racing Club',       espn: ['racing santander', 'racing club', 'real racing'] },
+            { name: 'SD Eibar',               espn: ['eibar'] },
+            { name: 'SD Huesca',              espn: ['huesca'] },
+            { name: 'UD Almeria',             espn: ['almeria', 'ud almeria'] },
+            { name: 'UD Las Palmas',          espn: ['las palmas', 'ud las palmas'] },
+        ]
+    };
+
+    // =====================================================================
+    //  CONFIGURATION
+    // =====================================================================
+    const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
+    const ESPN_COMP = { 'laliga-easports': 'esp.1', 'laliga-hypermotion': 'esp.2' };
+    const STORAGE_KEY = 'laliga-cal-selected-teams';
+
+    const COMPETITIONS = {
+        'laliga-easports':    { name: 'LaLiga EA Sports',   css: 'ea',    color: '#ff2d55' },
+        'laliga-hypermotion': { name: 'LaLiga Hypermotion', css: 'hyper', color: '#00dc82' }
+    };
+
+    const MONTHS = [
+        'Enero','Febrero','Marzo','Abril','Mayo','Junio',
+        'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'
+    ];
+
+    // =====================================================================
+    //  STATE
+    // =====================================================================
+    const state = {
+        selectedTeams: new Set(),   // 'slug:index'
+        homeMatches: [],
+        activeComp: 'laliga-easports',
+        month: new Date().getMonth(),
+        year: new Date().getFullYear(),
+        matchCache: [],
+        loading: false
+    };
+
+    // =====================================================================
+    //  DOM
+    // =====================================================================
+    const $ = id => document.getElementById(id);
+    const teamsList    = $('teamsList');
+    const fetchBtn     = $('fetchBtn');
+    const matchCount   = $('matchCount');
+    const progressArea = $('progressArea');
+    const calDays      = $('calDays');
+    const monthLabel   = $('monthLabel');
+    const modalOverlay = $('modalOverlay');
+    const modalTitle   = $('modalTitle');
+    const modalBody    = $('modalBody');
+
+    // =====================================================================
+    //  LOCALSTORAGE — persist selected teams across sessions
+    // =====================================================================
+    function saveSelection() {
+        try {
+            const arr = [...state.selectedTeams];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+        } catch (_) { /* localStorage not available (e.g. file:// in some browsers) */ }
+    }
+
+    function loadSelection() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return;
+            const arr = JSON.parse(raw);
+            if (!Array.isArray(arr)) return;
+            for (const key of arr) {
+                // Validate format 'comp:index' and that index exists
+                const [comp, idxStr] = key.split(':');
+                const idx = parseInt(idxStr);
+                if (TEAM_DATA[comp] && idx >= 0 && idx < TEAM_DATA[comp].length) {
+                    state.selectedTeams.add(key);
+                }
+            }
+        } catch (_) { /* ignore parse errors */ }
+    }
+
+    // =====================================================================
+    //  NAME MATCHING
+    // =====================================================================
+    function normalize(s) {
+        return s.toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s]/g, '')
+            .replace(/\s+/g, ' ').trim();
+    }
+
+    function findTeamIndex(compSlug, espnName) {
+        const n = normalize(espnName);
+        const teams = TEAM_DATA[compSlug];
+        for (let i = 0; i < teams.length; i++) {
+            for (const alias of teams[i].espn) {
+                const a = normalize(alias);
+                if (n === a || n.includes(a) || a.includes(n)) return i;
+            }
+            const dn = normalize(teams[i].name);
+            if (n === dn || n.includes(dn) || dn.includes(n)) return i;
+        }
+        return -1;
+    }
+
+    // =====================================================================
+    //  RENDER TEAM CHECKBOXES
+    // =====================================================================
+    function renderTeams() {
+        const teams = TEAM_DATA[state.activeComp];
+        const accentClass = state.activeComp === 'laliga-easports' ? 'ea' : 'hyper';
+
+        teamsList.innerHTML = teams.map((t, i) => {
+            const key = state.activeComp + ':' + i;
+            const checked = state.selectedTeams.has(key) ? 'checked' : '';
+            return `<label class="team-item">
+                <input type="checkbox" class="${accentClass}" value="${i}" data-comp="${state.activeComp}" ${checked}>
+                <span class="team-name">${t.name}</span>
+            </label>`;
+        }).join('');
+
+        teamsList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const key = cb.dataset.comp + ':' + cb.value;
+                cb.checked ? state.selectedTeams.add(key) : state.selectedTeams.delete(key);
+                saveSelection();
+                updateFetchBtn();
+            });
+        });
+    }
+
+    function updateFetchBtn() {
+        const n = state.selectedTeams.size;
+        fetchBtn.disabled = n === 0 || state.loading;
+        fetchBtn.textContent = n > 0
+            ? `Buscar partidos de local (${n})`
+            : 'Buscar partidos de local';
+    }
+
+    // =====================================================================
+    //  ESPN API
+    // =====================================================================
+    function buildMonthRanges() {
+        const now = new Date();
+        const sy = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+        const ranges = [];
+        for (let m = 7; m <= 11; m++) {
+            const last = new Date(sy, m + 1, 0).getDate();
+            ranges.push(`${sy}${String(m+1).padStart(2,'0')}01-${sy}${String(m+1).padStart(2,'0')}${String(last).padStart(2,'0')}`);
+        }
+        for (let m = 0; m <= 5; m++) {
+            const ey = sy + 1;
+            const last = new Date(ey, m + 1, 0).getDate();
+            ranges.push(`${ey}${String(m+1).padStart(2,'0')}01-${ey}${String(m+1).padStart(2,'0')}${String(last).padStart(2,'0')}`);
+        }
+        return ranges;
+    }
+
+    function parseESPNEvents(events, compSlug) {
+        const matches = [];
+        for (const ev of (events || [])) {
+            const comp = ev.competitions?.[0];
+            if (!comp) continue;
+            const home = comp.competitors?.find(c => c.homeAway === 'home');
+            const away = comp.competitors?.find(c => c.homeAway === 'away');
+            if (!home || !away) continue;
+            const dt = new Date(ev.date);
+            if (isNaN(dt.getTime())) continue;
+            const status = comp.status?.type?.state || '';
+            const completed = status === 'post';
+            matches.push({
+                id: ev.id,
+                date: dt,
+                homeTeam: {
+                    name: home.team?.displayName || home.team?.shortDisplayName || '?',
+                    logo: home.team?.logo || '',
+                },
+                awayTeam: {
+                    name: away.team?.displayName || away.team?.shortDisplayName || '?',
+                    logo: away.team?.logo || '',
+                },
+                homeScore: completed ? home.score : null,
+                awayScore: completed ? away.score : null,
+                venue: comp.venue?.fullName || '',
+                city: comp.venue?.address?.city || '',
+                status: completed ? 'Finalizado' : (status === 'in' ? 'En juego' : 'Programado'),
+                competition: compSlug
+            });
+        }
+        return matches;
+    }
+
+    async function fetchCompetitionMatches(compSlug, onProgress) {
+        const espnSlug = ESPN_COMP[compSlug];
+        const ranges = buildMonthRanges();
+        let done = 0;
+
+        const promises = ranges.map(async (range) => {
+            const url = `${ESPN_BASE}/${espnSlug}/scoreboard?dates=${range}&limit=200`;
+            try {
+                const r = await fetch(url);
+                if (!r.ok) return [];
+                const data = await r.json();
+                return parseESPNEvents(data.events, compSlug);
+            } catch (_) {
+                return [];
+            } finally {
+                done++;
+                if (onProgress) onProgress(done, ranges.length);
+            }
+        });
+
+        const results = await Promise.all(promises);
+        const allMatches = [];
+        for (const batch of results) allMatches.push(...batch);
+        return allMatches;
+    }
+
+    // =====================================================================
+    //  MAIN FETCH LOGIC
+    // =====================================================================
+    async function loadMatches() {
+        state.loading = true;
+        fetchBtn.disabled = true;
+        fetchBtn.textContent = 'Buscando...';
+        matchCount.textContent = '';
+        progressArea.innerHTML = '<div class="progress-bar"><div class="fill" id="progressFill" style="width:0%"></div></div>';
+
+        const compsNeeded = new Set();
+        const selectedByComp = {};
+        state.selectedTeams.forEach(key => {
+            const [comp, idx] = key.split(':');
+            compsNeeded.add(comp);
+            if (!selectedByComp[comp]) selectedByComp[comp] = new Set();
+            selectedByComp[comp].add(parseInt(idx));
+        });
+
+        const totalSteps = compsNeeded.size * 11;
+        let globalDone = 0;
+        const fillEl = () => $('progressFill');
+
+        let allMatches = [];
+
+        for (const slug of compsNeeded) {
+            const matches = await fetchCompetitionMatches(slug, () => {
+                globalDone++;
+                const pct = Math.round((globalDone / totalSteps) * 100);
+                const el = fillEl();
+                if (el) el.style.width = pct + '%';
+            });
+            allMatches.push(...matches);
+        }
+
+        state.homeMatches = [];
+        for (const m of allMatches) {
+            const compSlug = m.competition;
+            const teamIdx = findTeamIndex(compSlug, m.homeTeam.name);
+            if (teamIdx >= 0 && selectedByComp[compSlug]?.has(teamIdx)) {
+                m._teamIdx = teamIdx;
+                state.homeMatches.push(m);
+            }
+        }
+        state.homeMatches.sort((a, b) => a.date - b.date);
+
+        if (state.homeMatches.length > 0) {
+            const now = new Date();
+            const first = state.homeMatches.find(m => m.date >= now) || state.homeMatches[0];
+            state.month = first.date.getMonth();
+            state.year  = first.date.getFullYear();
+        }
+
+        renderCalendar();
+        state.loading = false;
+        updateFetchBtn();
+        progressArea.innerHTML = '';
+
+        if (state.homeMatches.length > 0) {
+            matchCount.textContent = state.homeMatches.length + ' partido(s) de local encontrados';
+        } else if (allMatches.length === 0) {
+            matchCount.textContent = '';
+            calDays.innerHTML = `<div class="error-msg" style="grid-column:1/-1">
+                No se obtuvieron datos de ESPN. Comprueba tu conexion a internet
+                o intentalo de nuevo en unos minutos.
+            </div>`;
+        } else {
+            matchCount.textContent = '0 partidos de local (de ' + allMatches.length + ' totales obtenidos)';
+        }
+    }
+
+    // =====================================================================
+    //  CALENDAR
+    // =====================================================================
+    function renderCalendar() {
+        monthLabel.textContent = MONTHS[state.month] + ' ' + state.year;
+
+        const firstDay    = new Date(state.year, state.month, 1);
+        const daysInMonth = new Date(state.year, state.month + 1, 0).getDate();
+        const startDow    = (firstDay.getDay() + 6) % 7;
+
+        const today = new Date();
+        const isCurr = today.getMonth() === state.month && today.getFullYear() === state.year;
+
+        const byDay = {};
+        state.homeMatches.forEach(m => {
+            if (m.date.getMonth() === state.month && m.date.getFullYear() === state.year) {
+                const d = m.date.getDate();
+                (byDay[d] = byDay[d] || []).push(m);
+            }
+        });
+
+        state.matchCache = [];
+        let html = '';
+
+        for (let i = 0; i < startDow; i++) html += '<div class="cal-day empty"></div>';
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const cls = (isCurr && d === today.getDate()) ? ' today' : '';
+            const dayMatches = byDay[d] || [];
+
+            html += `<div class="cal-day${cls}"><div class="day-num">${d}</div>`;
+
+            dayMatches.forEach(m => {
+                const idx = state.matchCache.length;
+                state.matchCache.push(m);
+
+                const comp = COMPETITIONS[m.competition];
+                const time = m.date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                const scoreTxt = m.homeScore !== null ? (' ' + m.homeScore + '-' + m.awayScore) : '';
+                const teamName = TEAM_DATA[m.competition][m._teamIdx]?.name || m.homeTeam.name;
+
+                html += `<div class="match-badge ${comp.css}" onclick="window._showMatch(${idx})"
+                    title="${teamName} vs ${m.awayTeam.name} — ${time}">
+                    <span class="badge-time">${time}${scoreTxt}</span>
+                    <span class="badge-vs">vs ${m.awayTeam.name}</span>
+                </div>`;
+            });
+
+            html += '</div>';
+        }
+
+        const total = startDow + daysInMonth;
+        const rem = (7 - total % 7) % 7;
+        for (let i = 0; i < rem; i++) html += '<div class="cal-day empty"></div>';
+
+        calDays.innerHTML = html;
+    }
+
+    // =====================================================================
+    //  MODAL
+    // =====================================================================
+    window._showMatch = function (idx) {
+        const m = state.matchCache[idx];
+        if (!m) return;
+
+        const d = m.date;
+        const dateStr = d.toLocaleDateString('es-ES', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        });
+        const time = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        const comp = COMPETITIONS[m.competition];
+        const teamName = TEAM_DATA[m.competition][m._teamIdx]?.name || m.homeTeam.name;
+
+        const homeLogo = m.homeTeam.logo
+            ? `<img src="${m.homeTeam.logo}" onerror="this.style.display='none'">`
+            : '';
+        const awayLogo = m.awayTeam.logo
+            ? `<img src="${m.awayTeam.logo}" onerror="this.style.display='none'">`
+            : '';
+
+        const center = m.homeScore !== null
+            ? `<span class="score">${m.homeScore} - ${m.awayScore}</span>`
+            : `<span class="vs-label">${time}</span>`;
+
+        modalTitle.textContent = dateStr;
+        modalBody.innerHTML = `
+            <div class="match-detail">
+                ${homeLogo}
+                <span class="team-label">${teamName}</span>
+                ${center}
+                <span class="team-label">${m.awayTeam.name}</span>
+                ${awayLogo}
+            </div>
+            <div class="meta">
+                <span class="comp-name" style="color:${comp.color}">${comp.name}</span>
+                ${m.venue ? ' &middot; ' + m.venue : ''}
+                ${m.city ? ', ' + m.city : ''}
+                ${m.status ? ' &middot; ' + m.status : ''}
+            </div>`;
+
+        modalOverlay.classList.add('active');
+    };
+
+    // =====================================================================
+    //  EVENT LISTENERS
+    // =====================================================================
+    document.querySelectorAll('.comp-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.comp-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            state.activeComp = tab.dataset.comp;
+            renderTeams();
+        });
+    });
+
+    $('selectAll').addEventListener('click', () => {
+        TEAM_DATA[state.activeComp].forEach((_, i) =>
+            state.selectedTeams.add(state.activeComp + ':' + i)
+        );
+        saveSelection();
+        renderTeams();
+        updateFetchBtn();
+    });
+
+    $('deselectAll').addEventListener('click', () => {
+        [...state.selectedTeams]
+            .filter(k => k.startsWith(state.activeComp + ':'))
+            .forEach(k => state.selectedTeams.delete(k));
+        saveSelection();
+        renderTeams();
+        updateFetchBtn();
+    });
+
+    fetchBtn.addEventListener('click', loadMatches);
+
+    $('prevMonth').addEventListener('click', () => {
+        state.month--;
+        if (state.month < 0) { state.month = 11; state.year--; }
+        renderCalendar();
+    });
+    $('nextMonth').addEventListener('click', () => {
+        state.month++;
+        if (state.month > 11) { state.month = 0; state.year++; }
+        renderCalendar();
+    });
+
+    $('modalClose').addEventListener('click', () => modalOverlay.classList.remove('active'));
+    modalOverlay.addEventListener('click', e => {
+        if (e.target === modalOverlay) modalOverlay.classList.remove('active');
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') modalOverlay.classList.remove('active');
+    });
+
+    // =====================================================================
+    //  INIT — restore saved selections and auto-fetch if any
+    // =====================================================================
+    loadSelection();
+    renderTeams();
+    updateFetchBtn();
+    renderCalendar();
+
+    // If there are saved teams, auto-fetch matches on page load
+    if (state.selectedTeams.size > 0) {
+        loadMatches();
+    }
+
+})();
+</script>
+
+</body>
+</html>
