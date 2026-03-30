@@ -397,6 +397,16 @@
     const STORAGE_KEY = 'laliga-cal-selected-teams';
     const STORAGE_KEY_PLANNED = 'laliga-cal-planned-teams';
 
+    const DEFAULT_SELECTED = [
+        'laliga-hypermotion:1',   // Albacete BP
+        'laliga-hypermotion:2',   // Burgos CF
+        'laliga-hypermotion:6',   // CD Mirandes
+        'laliga-hypermotion:10',  // Granada CF
+        'laliga-hypermotion:19',  // SD Huesca
+        'laliga-hypermotion:20',  // UD Almeria
+        'laliga-hypermotion:21',  // UD Las Palmas
+    ];
+
     const COMPETITIONS = {
         'laliga-easports':    { name: 'LaLiga EA Sports',   css: 'ea',    color: '#ff2d55' },
         'laliga-hypermotion': { name: 'LaLiga Hypermotion', css: 'hyper', color: '#00dc82' }
@@ -446,7 +456,8 @@
 
     function loadSelection() {
         try {
-            const arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            const raw = localStorage.getItem(STORAGE_KEY);
+            const arr = raw !== null ? JSON.parse(raw) : DEFAULT_SELECTED;
             if (!Array.isArray(arr)) return;
             for (const key of arr) {
                 const [comp, idxStr] = key.split(':');
