@@ -417,18 +417,12 @@
     const STORAGE_KEY = 'laliga-cal-selected-teams';
     const STORAGE_KEY_PLANNED = 'laliga-cal-planned-teams';
 
-    // === GOOGLE CALENDAR ===
-    // Para usar la sincronizacion con Google Calendar:
-    // 1. Ve a https://console.cloud.google.com/
-    // 2. Crea un proyecto (o usa uno existente)
-    // 3. Habilita la API "Google Calendar API"
-    // 4. Ve a Credenciales > Crear credencial > ID de cliente OAuth 2.0
-    // 5. Tipo: Aplicacion web. Origenes autorizados: la URL donde alojas esta pagina
-    // 6. Copia el Client ID aqui abajo
-    const GCAL_CLIENT_ID = 'TU_CLIENT_ID.apps.googleusercontent.com';
-    const GCAL_CALENDAR_ID = 'c_ef9bbc45c83bc9048068acd5fedc47c48f8bcf00741b42a9d7a60ab03d247b11@group.calendar.google.com';
-    const GCAL_SCOPES = 'https://www.googleapis.com/auth/calendar.events';
-    const GCAL_API = 'https://www.googleapis.com/calendar/v3';
+    // === GOOGLE CALENDAR (via Apps Script) ===
+    // 1. Crea un Apps Script en https://script.google.com/
+    // 2. Pega el contenido de google-apps-script.js
+    // 3. Deploy > New deployment > Web app (Execute as: Me, Access: Anyone)
+    // 4. Pega la URL aqui:
+    const GCAL_SCRIPT_URL = 'TU_APPS_SCRIPT_URL';
 
     const DEFAULT_SELECTED = [
         'laliga-hypermotion:1',   // Albacete BP
@@ -461,8 +455,7 @@
         month: new Date().getMonth(),
         year: new Date().getFullYear(),
         matchCache: [],
-        loading: false,
-        gcalToken: null
+        loading: false
     };
 
     // =====================================================================
@@ -903,186 +896,68 @@
     };
 
     // =====================================================================
-    //  GOOGLE CALENDAR SYNC
+    //  GOOGLE CALENDAR SYNC (via Apps Script)
     // =====================================================================
-    let gcalTokenClient = null;
-
-    function initGoogleAuth() {
-        if (typeof google === 'undefined' || !google.accounts) return;
-        gcalTokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: GCAL_CLIENT_ID,
-            scope: GCAL_SCOPES,
-            callback: (resp) => {
-                if (resp.error) {
-                    gcalStatus.textContent = 'Auth error: ' + resp.error;
-                    gcalStatus.className = 'gcal-status error';
-                    return;
-                }
-                state.gcalToken = resp.access_token;
-                doGCalSync();
-            }
-        });
-    }
-
     function updateGCalBtn() {
         gcalBtn.disabled = state.homeMatches.length === 0 || state.loading;
     }
 
-    async function gcalFetch(path, options) {
-        const r = await fetch(GCAL_API + path, {
-            ...options,
-            headers: {
-                'Authorization': 'Bearer ' + state.gcalToken,
-                'Content-Type': 'application/json',
-                ...(options?.headers || {})
-            }
+    function buildMatchPayload() {
+        return state.homeMatches.map(m => {
+            const teamName = TEAM_DATA[m.competition][m._teamIdx]?.name || m.homeTeam.name;
+            const comp = COMPETITIONS[m.competition];
+            const planned = m._planned ? ' [Planificado]' : '';
+            const score = m.homeScore !== null ? ` (${m.homeScore}-${m.awayScore})` : '';
+            const endDate = new Date(m.date.getTime() + 2 * 60 * 60 * 1000);
+            return {
+                id: String(m.id),
+                summary: `${teamName} vs ${m.awayTeam.name}${score}${planned}`,
+                start: m.date.toISOString(),
+                end: endDate.toISOString(),
+                location: [m.venue, m.city].filter(Boolean).join(', '),
+                description: [
+                    comp.name, m.status,
+                    m._planned ? 'Equipo planificado \u2014 aun no en produccion' : ''
+                ].filter(Boolean).join('\n'),
+                colorId: comp.css === 'ea' ? '11' : '10'
+            };
         });
-        if (r.status === 401) {
-            state.gcalToken = null;
-            throw { status: 401, message: 'Token expirado' };
+    }
+
+    async function onGCalClick() {
+        if (GCAL_SCRIPT_URL === 'TU_APPS_SCRIPT_URL') {
+            gcalStatus.textContent = 'Configura GCAL_SCRIPT_URL en el codigo fuente.';
+            gcalStatus.className = 'gcal-status error';
+            return;
         }
-        if (!r.ok) {
-            const err = await r.json().catch(() => ({}));
-            throw { status: r.status, message: err.error?.message || r.statusText };
-        }
-        if (r.status === 204) return null;
-        return r.json();
-    }
 
-    async function listOurEvents() {
-        const calId = encodeURIComponent(GCAL_CALENDAR_ID);
-        const prop = encodeURIComponent('source=laliga-calendario');
-        let all = [];
-        let pageToken = '';
-        do {
-            const pg = pageToken ? '&pageToken=' + pageToken : '';
-            const data = await gcalFetch(
-                `/calendars/${calId}/events?maxResults=250&privateExtendedProperty=${prop}${pg}`
-            );
-            all.push(...(data.items || []));
-            pageToken = data.nextPageToken || '';
-        } while (pageToken);
-        return all;
-    }
-
-    function buildGCalEvent(m) {
-        const teamName = TEAM_DATA[m.competition][m._teamIdx]?.name || m.homeTeam.name;
-        const comp = COMPETITIONS[m.competition];
-        const planned = m._planned ? ' [Planificado]' : '';
-        const score = m.homeScore !== null ? ` (${m.homeScore}-${m.awayScore})` : '';
-        const endDate = new Date(m.date.getTime() + 2 * 60 * 60 * 1000);
-
-        return {
-            summary: `${teamName} vs ${m.awayTeam.name}${score}${planned}`,
-            location: [m.venue, m.city].filter(Boolean).join(', '),
-            description: [
-                comp.name,
-                m.status,
-                m._planned ? 'Equipo planificado \u2014 aun no en produccion' : ''
-            ].filter(Boolean).join('\n'),
-            start: { dateTime: m.date.toISOString(), timeZone: 'Europe/Madrid' },
-            end:   { dateTime: endDate.toISOString(), timeZone: 'Europe/Madrid' },
-            extendedProperties: {
-                private: { espnMatchId: String(m.id), source: 'laliga-calendario' }
-            },
-            colorId: comp.css === 'ea' ? '11' : '10'
-        };
-    }
-
-    function eventsEqual(existing, newEv) {
-        return existing.summary === newEv.summary
-            && existing.location === newEv.location
-            && existing.start?.dateTime === newEv.start.dateTime;
-    }
-
-    async function doGCalSync() {
         gcalBtn.disabled = true;
         gcalBtn.innerHTML = '<span class="g-icon">&#128197;</span> Sincronizando...';
-        gcalStatus.textContent = '';
+        gcalStatus.textContent = 'Enviando partidos al Apps Script...';
         gcalStatus.className = 'gcal-status';
 
         try {
-            const existing = await listOurEvents();
-            const existingById = {};
-            for (const ev of existing) {
-                const matchId = ev.extendedProperties?.private?.espnMatchId;
-                if (matchId) existingById[matchId] = ev;
-            }
+            const r = await fetch(GCAL_SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ matches: buildMatchPayload() })
+            });
+            const data = await r.json();
 
-            const calId = encodeURIComponent(GCAL_CALENDAR_ID);
-            const currentIds = new Set();
-            let created = 0, updated = 0, deleted = 0, skipped = 0;
-            const total = state.homeMatches.length + Object.keys(existingById).length;
-            let progress = 0;
-
-            for (const m of state.homeMatches) {
-                currentIds.add(String(m.id));
-                const body = buildGCalEvent(m);
-                const ex = existingById[String(m.id)];
-
-                if (ex) {
-                    if (eventsEqual(ex, body)) {
-                        skipped++;
-                    } else {
-                        await gcalFetch(`/calendars/${calId}/events/${ex.id}`, {
-                            method: 'PUT', body: JSON.stringify(body)
-                        });
-                        updated++;
-                    }
-                } else {
-                    await gcalFetch(`/calendars/${calId}/events`, {
-                        method: 'POST', body: JSON.stringify(body)
-                    });
-                    created++;
-                }
-                progress++;
-                gcalStatus.textContent = `Procesando ${progress}/${total}...`;
-            }
-
-            for (const [matchId, ev] of Object.entries(existingById)) {
-                if (!currentIds.has(matchId)) {
-                    await gcalFetch(`/calendars/${calId}/events/${ev.id}`, { method: 'DELETE' });
-                    deleted++;
-                }
-                progress++;
-                gcalStatus.textContent = `Procesando ${progress}/${total}...`;
-            }
+            if (!data.ok) throw new Error(data.error || 'Error desconocido');
 
             const parts = [];
-            if (created) parts.push(created + ' creados');
-            if (updated) parts.push(updated + ' actualizados');
-            if (deleted) parts.push(deleted + ' eliminados');
-            if (skipped) parts.push(skipped + ' sin cambios');
+            if (data.created) parts.push(data.created + ' creados');
+            if (data.updated) parts.push(data.updated + ' actualizados');
+            if (data.deleted) parts.push(data.deleted + ' eliminados');
+            if (data.skipped) parts.push(data.skipped + ' sin cambios');
             gcalStatus.textContent = 'Sync OK: ' + (parts.join(', ') || 'nada que sincronizar');
             gcalStatus.className = 'gcal-status success';
         } catch (err) {
-            if (err.status === 401) {
-                gcalStatus.textContent = 'Sesion expirada. Haz clic de nuevo.';
-            } else {
-                gcalStatus.textContent = 'Error: ' + (err.message || err);
-            }
+            gcalStatus.textContent = 'Error: ' + (err.message || err);
             gcalStatus.className = 'gcal-status error';
         } finally {
             gcalBtn.disabled = false;
             gcalBtn.innerHTML = '<span class="g-icon">&#128197;</span> Sync Google Calendar';
-        }
-    }
-
-    function onGCalClick() {
-        if (GCAL_CLIENT_ID === 'TU_CLIENT_ID.apps.googleusercontent.com') {
-            gcalStatus.textContent = 'Configura GCAL_CLIENT_ID en el codigo fuente primero.';
-            gcalStatus.className = 'gcal-status error';
-            return;
-        }
-        if (!gcalTokenClient) {
-            gcalStatus.textContent = 'Google Identity Services no cargado. Refresca la pagina.';
-            gcalStatus.className = 'gcal-status error';
-            return;
-        }
-        if (state.gcalToken) {
-            doGCalSync();
-        } else {
-            gcalTokenClient.requestAccessToken();
         }
     }
 
@@ -1150,16 +1025,6 @@
     // If there are saved teams, auto-fetch matches on page load
     if (state.selectedTeams.size > 0) {
         loadMatches();
-    }
-
-    // Load Google Identity Services dynamically
-    if (GCAL_CLIENT_ID !== 'TU_CLIENT_ID.apps.googleusercontent.com') {
-        const gisScript = document.createElement('script');
-        gisScript.src = 'https://accounts.google.com/gsi/client';
-        gisScript.async = true;
-        gisScript.defer = true;
-        gisScript.onload = () => initGoogleAuth();
-        document.head.appendChild(gisScript);
     }
 
 })();
