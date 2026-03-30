@@ -937,23 +937,22 @@
         gcalStatus.className = 'gcal-status';
 
         try {
-            const r = await fetch(GCAL_SCRIPT_URL, {
+            const matches = buildMatchPayload();
+
+            // Google Apps Script redirects cross-origin, blocking the response
+            // body due to CORS. mode:'no-cors' guarantees the POST goes through;
+            // we just can't read the detailed response counts.
+            await fetch(GCAL_SCRIPT_URL, {
                 method: 'POST',
-                body: JSON.stringify({ matches: buildMatchPayload() })
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ matches })
             });
-            const data = await r.json();
 
-            if (!data.ok) throw new Error(data.error || 'Error desconocido');
-
-            const parts = [];
-            if (data.created) parts.push(data.created + ' creados');
-            if (data.updated) parts.push(data.updated + ' actualizados');
-            if (data.deleted) parts.push(data.deleted + ' eliminados');
-            if (data.skipped) parts.push(data.skipped + ' sin cambios');
-            gcalStatus.textContent = 'Sync OK: ' + (parts.join(', ') || 'nada que sincronizar');
+            gcalStatus.textContent = matches.length + ' partidos enviados. Revisa tu Google Calendar.';
             gcalStatus.className = 'gcal-status success';
         } catch (err) {
-            gcalStatus.textContent = 'Error: ' + (err.message || err);
+            gcalStatus.textContent = 'Error de red: ' + (err.message || err);
             gcalStatus.className = 'gcal-status error';
         } finally {
             gcalBtn.disabled = false;
