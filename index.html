@@ -917,8 +917,10 @@
                 location: [m.venue, m.city].filter(Boolean).join(', '),
                 description: [
                     comp.name, m.status,
-                    m._planned ? 'Equipo planificado \u2014 aun no en produccion' : ''
-                ].filter(Boolean).join('\n'),
+                    m._planned ? 'Equipo planificado \u2014 aun no en produccion' : '',
+                    '',
+                    'Guardias: https://docs.google.com/spreadsheets/d/1efhBkPiknWLlQkDsgxKbwus46oes4TOCQPtVCW5PRAM/edit?gid=476041441#gid=476041441'
+                ].filter(s => s !== null && s !== undefined).join('\n'),
                 colorId: comp.css === 'ea' ? '11' : '10'
             };
         });
